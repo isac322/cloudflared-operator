@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: cloudflared-operator
 repo: github.com/isac322/cloudflared-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: bhyoo.com
+  group: cloudflared-operator
+  kind: Tunnel
+  path: github.com/isac322/cloudflared-operator/api/v1
+  version: v1
 version: "3"

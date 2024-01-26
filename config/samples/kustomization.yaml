@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- cloudflared-operator_v1_tunnel.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

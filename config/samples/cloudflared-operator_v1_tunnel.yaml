@@ -1,0 +1,12 @@
+apiVersion: cloudflared-operator.bhyoo.com/v1
+kind: Tunnel
+metadata:
+  labels:
+    app.kubernetes.io/name: tunnel
+    app.kubernetes.io/instance: tunnel-sample
+    app.kubernetes.io/part-of: cloudflared-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: cloudflared-operator
+  name: tunnel-sample
+spec:
+  # TODO(user): Add fields here
