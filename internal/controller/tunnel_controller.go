@@ -43,6 +43,8 @@ import (
 const (
 	apiTokenKey        = "token"
 	secretNameField    = ".spec.apiTokenSecretRef.name"
+	tunnelRefNameField = ".spec.tunnelRef.name"
+	tunnelRefKindField = ".spec.tunnelRef.kind"
 	fileNameCredential = "credential.json"
 	fileNameConfig     = "config.yaml"
 )
@@ -183,19 +185,66 @@ func (r *TunnelReconciler) findObjectsForSecret(ctx context.Context, secret clie
 	return requests
 }
 
+func (r *TunnelReconciler) findObjectsForTunnelIngress(
+	ctx context.Context,
+	tunnelIngress client.Object,
+) []reconcile.Request {
+	ingress := tunnelIngress.(*v1.TunnelIngress)
+	if ingress.Spec.TunnelRef.Kind != "Tunnel" {
+		return nil
+	}
+	// TODO: ingress.Status 확인하기
+
+	return []reconcile.Request{{NamespacedName: types.NamespacedName{
+		Name:      ingress.Spec.TunnelRef.Name,
+		Namespace: tunnelIngress.GetNamespace(),
+	}}}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ctx := context.Background()
+
 	if err := mgr.GetFieldIndexer().IndexField(
-		context.Background(),
+		ctx,
 		&v1.Tunnel{},
 		secretNameField,
 		func(rawObj client.Object) []string {
-			// Extract the Secret name from the Tunnel Spec, if one is provided
 			tunnel := rawObj.(*v1.Tunnel)
 			if tunnel.Spec.APITokenSecretRef.Name == "" {
 				return nil
 			}
 			return []string{tunnel.Spec.APITokenSecretRef.Name}
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&v1.TunnelIngress{},
+		tunnelRefNameField,
+		func(rawObj client.Object) []string {
+			tunnelIngress := rawObj.(*v1.TunnelIngress)
+			if tunnelIngress.Spec.TunnelRef.Name == "" {
+				return nil
+			}
+			return []string{tunnelIngress.Spec.TunnelRef.Name}
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&v1.TunnelIngress{},
+		tunnelRefKindField,
+		func(rawObj client.Object) []string {
+			tunnelIngress := rawObj.(*v1.TunnelIngress)
+			if tunnelIngress.Spec.TunnelRef.Kind == "" {
+				return nil
+			}
+			return []string{tunnelIngress.Spec.TunnelRef.Kind}
 		},
 	); err != nil {
 		return err
@@ -211,6 +260,10 @@ func (r *TunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSecret),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		).
+		Watches(
+			&v1.TunnelIngress{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForTunnelIngress),
 		).
 		Complete(r)
 }

@@ -1,0 +1,152 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: tunnelingresses.cloudflared-operator.bhyoo.com
+spec:
+  group: cloudflared-operator.bhyoo.com
+  names:
+    kind: TunnelIngress
+    listKind: TunnelIngressList
+    plural: tunnelingresses
+    singular: tunnelingress
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: TunnelIngress is the Schema for the tunnelingresses API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TunnelIngressSpec defines the desired state of TunnelIngress
+            properties:
+              dnsRecordTTL:
+                type: string
+              hostname:
+                type: string
+              originRequest:
+                properties:
+                  access:
+                    description: Access struct holds the access control settings.
+                    properties:
+                      audTag:
+                        description: AudTag is a list of audit tags for access control.
+                        items:
+                          type: string
+                        type: array
+                      required:
+                        description: Required indicates if access control is required.
+                        type: boolean
+                      teamName:
+                        description: TeamName specifies the team name for access control.
+                        type: string
+                    type: object
+                  caPool:
+                    description: CAPool is the path to the certificate authority pool.
+                    type: string
+                  connectTimeout:
+                    default: 30s
+                    description: ConnectTimeout is the timeout for establishing new
+                      connections.
+                    type: string
+                  disableChunkedEncoding:
+                    description: DisableChunkedEncoding determines whether chunked
+                      encoding is disabled.
+                    type: boolean
+                  http2Origin:
+                    description: HTTP2Origin enables HTTP/2 support to the origin.
+                    type: boolean
+                  httpHostHeader:
+                    description: HTTPHostHeader is the HTTP Host header to use in
+                      requests to the origin.
+                    type: string
+                  keepAliveConnections:
+                    default: 100
+                    description: KeepAliveConnections is the maximum number of keep-alive
+                      connections.
+                    type: integer
+                  keepAliveTimeout:
+                    default: 1m30s
+                    description: KeepAliveTimeout is the timeout for keeping connections
+                      alive.
+                    type: string
+                  noHappyEyeballs:
+                    description: NoHappyEyeballs disables "Happy Eyeballs" for IPv4/IPv6
+                      fallback.
+                    type: boolean
+                  noTLSVerify:
+                    description: NoTLSVerify controls whether TLS verification is
+                      bypassed.
+                    type: boolean
+                  originServerName:
+                    description: OriginServerName is the server name used in the origin
+                      server certificate.
+                    type: string
+                  proxyAddress:
+                    default: 127.0.0.1
+                    description: ProxyAddress is the address of the proxy server.
+                    type: string
+                  proxyPort:
+                    description: ProxyPort is the port of the proxy server.
+                    type: integer
+                  proxyType:
+                    description: ProxyType is the type of proxy to use (e.g., HTTP,
+                      SOCKS).
+                    type: string
+                  tcpKeepAlive:
+                    default: 30s
+                    description: TCPKeepAlive is the keep-alive time for TCP connections.
+                    type: string
+                  tlsTimeout:
+                    default: 10s
+                    description: TLSTimeout is the timeout for TLS connections.
+                    type: string
+                type: object
+              path:
+                type: string
+              service:
+                type: string
+              tunnelRef:
+                properties:
+                  kind:
+                    default: Tunnel
+                    description: Kind is the type of the resource. Defaults to `Tunnel`.
+                    enum:
+                    - Tunnel
+                    type: string
+                  name:
+                    description: Name is Tunnel name that bind to the TunnelIngress.
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - tunnelRef
+            type: object
+          status:
+            description: TunnelIngressStatus defines the observed state of TunnelIngress
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

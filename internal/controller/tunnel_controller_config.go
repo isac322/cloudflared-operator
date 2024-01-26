@@ -82,37 +82,40 @@ func (r *TunnelReconciler) reconcileConfig(ctx context.Context, tunnel *v1.Tunne
 		return recordConditionFrom(WrapError(err, v1.ConfigReasonFailedToGetExistingConfig))
 	}
 
-	if dirtyStatus || SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
+	if SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
 		Type:               v1.TunnelConditionTypeConfig,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},
 	}) {
+		dirtyStatus = true
+	}
+
+	if dirtyStatus {
 		return r.Status().Update(ctx, tunnel)
 	}
 	return nil
 }
 
 func (r *TunnelReconciler) buildConfig(ctx context.Context, tunnel *v1.Tunnel) (TunnelConfig, error) {
-	var bindings v1.TunnelBindingList
-	err := r.List(ctx, &bindings, client.MatchingLabels{"cloudflared-operator.bhyoo.com/tunnel-name": tunnel.Name})
-	if err != nil {
+	var ingressList v1.TunnelIngressList
+	if err := r.List(
+		ctx,
+		&ingressList,
+		client.MatchingFields{tunnelRefNameField: tunnel.Name, tunnelRefKindField: "Tunnel"},
+		client.InNamespace(tunnel.Namespace),
+	); err != nil {
 		return TunnelConfig{}, err
 	}
 
 	config := TunnelConfig{
 		TunnelRunParameters: tunnel.Spec.TunnelRunParameters,
-		OriginRequestConfig: OriginRequestConfig{},
-		Ingress:             make([]TunnelConfigIngress, 0, len(bindings.Items)+1),
+		OriginRequestConfig: v1.OriginRequestConfig{},
+		Ingress:             make([]v1.TunnelConfigIngress, 0, len(ingressList.Items)+1),
 	}
-	for _, binding := range bindings.Items {
-		config.Ingress = append(config.Ingress, TunnelConfigIngress{
-			Hostname:      binding.Spec.Hostname,
-			Path:          binding.Spec.Path,
-			Service:       binding.Spec.Service,
-			OriginRequest: OriginRequestConfig{},
-		})
+	for _, binding := range ingressList.Items {
+		config.Ingress = append(config.Ingress, binding.Spec.TunnelConfigIngress)
 	}
-	config.Ingress = append(config.Ingress, TunnelConfigIngress{Service: "http_status:404"})
+	config.Ingress = append(config.Ingress, v1.TunnelConfigIngress{Service: "http_status:404"})
 
 	if tunnel.Spec.OriginConfiguration != nil {
 		config.OriginRequestConfig.OriginTLSSettings = tunnel.Spec.OriginConfiguration.TLSSettings

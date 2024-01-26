@@ -227,3 +227,17 @@ type Deployment struct {
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
+
+type TunnelConfigIngress struct {
+	Hostname      *string              `json:"hostname,omitempty"`
+	Path          *string              `json:"path,omitempty"`
+	Service       string               `json:"service,omitempty"`
+	OriginRequest *OriginRequestConfig `json:"originRequest,omitempty"`
+}
+
+type OriginRequestConfig struct {
+	*OriginTLSSettings        `json:",inline"`
+	*OriginHTTPSettings       `json:",inline"`
+	*OriginConnectionSettings `json:",inline"`
+	*OriginAccessSettings     `json:",inline"`
+}

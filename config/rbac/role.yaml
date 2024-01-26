@@ -61,6 +61,32 @@ rules:
 - apiGroups:
   - cloudflared-operator.bhyoo.com
   resources:
+  - tunnelingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cloudflared-operator.bhyoo.com
+  resources:
+  - tunnelingresses/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cloudflared-operator.bhyoo.com
+  resources:
+  - tunnelingresses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cloudflared-operator.bhyoo.com
+  resources:
   - tunnels
   verbs:
   - create
