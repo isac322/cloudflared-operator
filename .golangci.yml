@@ -2,6 +2,9 @@ run:
   timeout: 5m
   allow-parallel-runners: true
 
+output:
+  sort-results: true
+
 issues:
   # don't skip warning about doc comments
   # don't exclude the default set of lint
@@ -19,12 +22,17 @@ issues:
 linters:
   disable-all: true
   enable:
+    - bodyclose
+    - containedctx
     - dupl
     - errcheck
+    - errname
+    - exhaustive
     - exportloopref
     - goconst
     - gocyclo
     - gofmt
+    - gofumpt
     - goimports
     - gosimple
     - govet
@@ -32,9 +40,37 @@ linters:
     - lll
     - misspell
     - nakedret
+    - paralleltest
     - prealloc
+    - revive
     - staticcheck
+    - tparallel
     - typecheck
     - unconvert
     - unparam
     - unused
+
+
+linters-settings:
+  goimports:
+    # A comma-separated list of prefixes, which, if set, checks import paths
+    # with the given prefixes are grouped after 3rd-party packages.
+    # Default: ""
+    local-prefixes: github.com/isac322/cloudflared-operator
+  gofumpt:
+    # Module path which contains the source code being formatted.
+    # Default: ""
+    module-path: github.com/isac322/cloudflared-operator
+    # Choose whether to use the extra rules.
+    # Default: false
+    extra-rules: true
+  exhaustive:
+    check:
+      - switch
+      - map
+    check-generated: true
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: true
