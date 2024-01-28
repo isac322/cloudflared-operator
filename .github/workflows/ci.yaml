@@ -17,3 +17,14 @@ jobs:
         uses: ytanikin/PRConventionalCommits@1.1.0
         with:
           task_types: '["docs", "feat", "fix", "refactor", "test", "chore", "ci", "build", "perf", "revert", "style"]'
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.55.2
