@@ -1,0 +1,15 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Conventional Commit In Pull Requests
+        uses: ytanikin/PRConventionalCommits@1.1.0
