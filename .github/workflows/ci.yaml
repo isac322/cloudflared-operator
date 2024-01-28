@@ -13,3 +13,5 @@ jobs:
 
       - name: Conventional Commit In Pull Requests
         uses: ytanikin/PRConventionalCommits@1.1.0
+        with:
+          task_types: '["docs", "feat", "fix", "refactor", "test", "chore", "ci", "build", "perf", "revert", "style"]'
