@@ -190,7 +190,7 @@ func (r *TunnelReconciler) findObjectsForTunnelIngress(
 	tunnelIngress client.Object,
 ) []reconcile.Request {
 	ingress := tunnelIngress.(*v1.TunnelIngress)
-	if ingress.Spec.TunnelRef.Kind != "Tunnel" {
+	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil
 	}
 	if GetTunnelIngressCondition(
@@ -249,7 +249,7 @@ func (r *TunnelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if tunnelIngress.Spec.TunnelRef.Kind == "" {
 				return nil
 			}
-			return []string{tunnelIngress.Spec.TunnelRef.Kind}
+			return []string{string(tunnelIngress.Spec.TunnelRef.Kind)}
 		},
 	); err != nil {
 		return err

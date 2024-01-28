@@ -101,7 +101,7 @@ func (r *TunnelReconciler) buildConfig(ctx context.Context, tunnel *v1.Tunnel) (
 	if err := r.List(
 		ctx,
 		&ingressList,
-		client.MatchingFields{tunnelRefNameField: tunnel.Name, tunnelRefKindField: "Tunnel"},
+		client.MatchingFields{tunnelRefNameField: tunnel.Name, tunnelRefKindField: string(v1.TunnelKindTunnel)},
 		client.InNamespace(tunnel.Namespace),
 	); err != nil {
 		return TunnelConfig{}, err

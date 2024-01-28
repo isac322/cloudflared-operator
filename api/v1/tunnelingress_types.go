@@ -21,15 +21,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TunnelKind ...
+// +kubebuilder:validation:Enum=Tunnel
+type TunnelKind string
+
+const (
+	TunnelKindTunnel TunnelKind = "Tunnel"
+)
+
 type TunnelRef struct {
 	// Name is Tunnel name that bind to the TunnelIngress.
 	Name string `json:"name"`
 
 	// Kind is the type of the resource. Defaults to `Tunnel`.
 	// +optional
-	// +kubebuilder:validation:Enum=Tunnel
 	// +kubebuilder:default:=Tunnel
-	Kind string `json:"kind,omitempty"`
+	Kind TunnelKind `json:"kind,omitempty"`
 }
 
 // TunnelIngressSpec defines the desired state of TunnelIngress

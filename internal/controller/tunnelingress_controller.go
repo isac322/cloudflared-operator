@@ -66,7 +66,7 @@ func (r *TunnelIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	switch ingress.Spec.TunnelRef.Kind {
-	case "Tunnel":
+	case v1.TunnelKindTunnel:
 		tunnel, err := r.getTunnelFromIngress(ctx, &ingress)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -134,7 +134,7 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 }
 
 func (r *TunnelIngressReconciler) getTunnelFromIngress(ctx context.Context, ingress *v1.TunnelIngress) (*v1.Tunnel, error) {
-	if ingress.Spec.TunnelRef.Kind != "Tunnel" {
+	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil, nil
 	}
 
