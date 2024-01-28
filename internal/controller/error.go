@@ -22,3 +22,7 @@ func (r ErrorWithReason[T]) Error() string {
 func (r ErrorWithReason[T]) Cause() error {
 	return r.cause
 }
+
+func (r ErrorWithReason[T]) Unwrap() error {
+	return r.cause
+}

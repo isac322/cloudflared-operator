@@ -278,8 +278,15 @@ func (r *TunnelReconciler) buildConditionRecorder(
 	tunnel *v1.Tunnel,
 	condType v1.TunnelConditionType,
 ) func(err error) error {
-	return func(err error) error {
-		cause := err
+	return func(err error) (cause error) {
+		defer func() {
+			if errors.Is(err, reconcile.TerminalError(nil)) &&
+				!errors.Is(cause, reconcile.TerminalError(nil)) {
+				cause = reconcile.TerminalError(cause)
+			}
+		}()
+
+		cause = err
 		var reason v1.TunnelConditionReason = ""
 		var withReason ErrorWithReason[v1.TunnelConditionReason]
 		if errors.As(err, &withReason) {

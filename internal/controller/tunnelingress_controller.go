@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	v1 "github.com/isac322/cloudflared-operator/api/v1"
 )
@@ -99,8 +100,15 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 	ingress *v1.TunnelIngress,
 	condType v1.TunnelIngressConditionType,
 ) func(err error) error {
-	return func(err error) error {
-		cause := err
+	return func(err error) (cause error) {
+		defer func() {
+			if errors.Is(err, reconcile.TerminalError(nil)) &&
+				!errors.Is(cause, reconcile.TerminalError(nil)) {
+				cause = reconcile.TerminalError(cause)
+			}
+		}()
+
+		cause = err
 		var reason v1.TunnelIngressConditionReason = ""
 		var withReason ErrorWithReason[v1.TunnelIngressConditionReason]
 		if errors.As(err, &withReason) {
