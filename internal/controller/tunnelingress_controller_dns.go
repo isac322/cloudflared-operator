@@ -47,7 +47,7 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 		ttl = (*ingress.Spec.DNSRecordTTL).Duration
 	}
 
-	err = cfClient.CreateDNSRecordForTunnel(ctx, tunnel.Spec.AccountID, tunnel.Status.TunnelID, *targetDomain, ttl)
+	err = cfClient.CreateDNSRecordIfNotExists(ctx, tunnel.Spec.AccountID, tunnel.Status.TunnelID, *targetDomain, ttl)
 	if err != nil {
 		return recordConditionFrom(WrapError(err, v1.DNSRecordReasonFailedToCreateRecord))
 	}

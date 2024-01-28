@@ -29,7 +29,7 @@ type TunnelCredential struct {
 type Client interface {
 	ValidateTunnelCredential(ctx context.Context, credential TunnelCredential) (bool, error)
 	GetOrCreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
-	CreateDNSRecordForTunnel(ctx context.Context, accountID, tunnelID, domain string, ttl time.Duration) error
+	CreateDNSRecordIfNotExists(ctx context.Context, accountID, tunnelID, domain string, ttl time.Duration) error
 }
 
 type client struct {
@@ -167,7 +167,7 @@ func normalizeZoneName(name string) string {
 	return name
 }
 
-func (c client) CreateDNSRecordForTunnel(
+func (c client) CreateDNSRecordIfNotExists(
 	ctx context.Context,
 	accountID, tunnelID, domain string,
 	ttl time.Duration,
@@ -197,5 +197,9 @@ func (c client) CreateDNSRecordForTunnel(
 			Proxied: ptr.To(true),
 		},
 	)
+	if cfErr, ok := err.(*cloudflare.RequestError); (ok || errors.As(err, &cfErr)) &&
+		cfErr.InternalErrorCodeIs(81053) {
+		return nil
+	}
 	return err
 }
