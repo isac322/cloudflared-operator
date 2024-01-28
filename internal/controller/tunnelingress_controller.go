@@ -47,10 +47,6 @@ type TunnelIngressReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the TunnelIngress object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
@@ -77,15 +73,14 @@ func (r *TunnelIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			l.Error(err, "unable to fetch Tunnel")
 			return ctrl.Result{}, err
 		}
-		r.reconcileDNSRecord(ctx, &ingress, tunnel)
+		if err = r.reconcileDNSRecord(ctx, &ingress, tunnel); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 
 	default:
 		return ctrl.Result{}, errors.New("unsupported tunnel type")
 	}
-
-	// TODO(user): your logic here
-
-	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
