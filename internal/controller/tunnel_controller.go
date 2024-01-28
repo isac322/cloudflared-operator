@@ -193,10 +193,11 @@ func (r *TunnelReconciler) findObjectsForTunnelIngress(
 	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil
 	}
-	if GetTunnelIngressCondition(
+	ingressCondition := GetTunnelIngressCondition(
 		ingress.Status,
 		v1.TunnelIngressConditionTypeDNSRecord,
-	).Status != corev1.ConditionTrue {
+	)
+	if ingressCondition == nil || ingressCondition.Status != corev1.ConditionTrue {
 		return nil
 	}
 
