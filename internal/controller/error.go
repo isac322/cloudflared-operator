@@ -6,23 +6,23 @@ type Reasons interface {
 	v1.TunnelConditionReason | v1.TunnelIngressConditionReason
 }
 
-type ErrorWithReason[T Reasons] struct {
+type ReasonedError[T Reasons] struct {
 	Reason T
 	cause  error
 }
 
-func WrapError[T Reasons](cause error, reason T) ErrorWithReason[T] {
-	return ErrorWithReason[T]{Reason: reason, cause: cause}
+func WrapError[T Reasons](cause error, reason T) ReasonedError[T] {
+	return ReasonedError[T]{Reason: reason, cause: cause}
 }
 
-func (r ErrorWithReason[T]) Error() string {
+func (r ReasonedError[T]) Error() string {
 	return r.cause.Error()
 }
 
-func (r ErrorWithReason[T]) Cause() error {
+func (r ReasonedError[T]) Cause() error {
 	return r.cause
 }
 
-func (r ErrorWithReason[T]) Unwrap() error {
+func (r ReasonedError[T]) Unwrap() error {
 	return r.cause
 }

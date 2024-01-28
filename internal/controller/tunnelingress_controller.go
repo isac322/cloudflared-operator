@@ -105,7 +105,7 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 
 		cause = err
 		var reason v1.TunnelIngressConditionReason = ""
-		var withReason ErrorWithReason[v1.TunnelIngressConditionReason]
+		var withReason ReasonedError[v1.TunnelIngressConditionReason]
 		if errors.As(err, &withReason) {
 			cause = withReason.Cause()
 			reason = withReason.Reason
