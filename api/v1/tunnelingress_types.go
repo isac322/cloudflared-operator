@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -41,10 +42,59 @@ type TunnelIngressSpec struct {
 	DNSRecordTTL *metav1.Duration `json:"dnsRecordTTL,omitempty"`
 }
 
+// TunnelIngressConditionType ...
+// +kubebuilder:validation:Enum=DNSRecord
+type TunnelIngressConditionType string
+
+const (
+	TunnelIngressConditionTypeDNSRecord TunnelIngressConditionType = "DNSRecord"
+)
+
+// TunnelIngressConditionReason ...
+// +kubebuilder:validation:Enum=Creating;NoToken;FailedToConnectCloudflare
+type TunnelIngressConditionReason string
+
+const (
+	DNSRecordReasonCreating             TunnelIngressConditionReason = "Creating"
+	DNSRecordReasonNoToken              TunnelIngressConditionReason = "NoToken"
+	DNSRecordReasonFailedToConnectCF    TunnelIngressConditionReason = "FailedToConnectCloudflare"
+	DNSRecordReasonFailedToCreateRecord TunnelIngressConditionReason = "FailedToCreateRecord"
+)
+
+type TunnelIngressStatusCondition struct {
+	// Type of condition for a component.
+	// Valid value: "Daemon", "Credential", "Config"
+	Type TunnelIngressConditionType `json:"type"`
+
+	// Status of the condition for a component.
+	// Valid values for "Daemon", "Credential", "Config": "True", "False", or "Unknown".
+	Status corev1.ConditionStatus `json:"status"`
+
+	// Message about the condition for a component.
+	// For example, information about a health check.
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// Error is Condition error code for a component.
+	// For example, a health check error code.
+	// +optional
+	Error string `json:"error,omitempty"`
+
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
+
+	// +optional
+	Reason TunnelIngressConditionReason `json:"reason,omitempty"`
+}
+
+func (c TunnelIngressStatusCondition) Equals(o TunnelIngressStatusCondition) bool {
+	return c.Type == o.Type && c.Status == o.Status && c.Message == o.Message &&
+		c.Error == o.Error && c.Reason == o.Reason
+}
+
 // TunnelIngressStatus defines the observed state of TunnelIngress
 type TunnelIngressStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions []TunnelIngressStatusCondition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

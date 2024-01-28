@@ -228,7 +228,8 @@ type TunnelStatusCondition struct {
 }
 
 func (c TunnelStatusCondition) Equals(o TunnelStatusCondition) bool {
-	return c.Type == o.Type && c.Status == o.Status && c.Message == o.Message && c.Error == o.Error && c.Reason == o.Reason
+	return c.Type == o.Type && c.Status == o.Status && c.Message == o.Message &&
+		c.Error == o.Error && c.Reason == o.Reason
 }
 
 // TunnelStatus defines the observed state of Tunnel

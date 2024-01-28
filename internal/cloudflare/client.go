@@ -4,9 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/goccy/go-json"
+	"golang.org/x/net/idna"
+	"golang.org/x/net/publicsuffix"
 	"k8s.io/utils/ptr"
 )
 
@@ -21,13 +27,14 @@ type TunnelCredential struct {
 }
 
 type Client interface {
-	CreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
 	ValidateTunnelCredential(ctx context.Context, credential TunnelCredential) (bool, error)
 	GetOrCreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
+	CreateDNSRecordForTunnel(ctx context.Context, accountID, tunnelID, domain string, ttl time.Duration) error
 }
 
 type client struct {
 	*cloudflare.API
+	zoneCache *sync.Map
 }
 
 func NewClient(token string) (Client, error) {
@@ -35,7 +42,7 @@ func NewClient(token string) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client{cli}, nil
+	return client{cli, &sync.Map{}}, nil
 }
 
 func (c client) CreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error) {
@@ -125,4 +132,70 @@ func (c client) GetOrCreateTunnel(ctx context.Context, accountID, name string) (
 	}
 
 	return c.getTunnelCredential(ctx, accountID, tunnels[0].ID)
+}
+
+func (c client) getZoneIDFromName(ctx context.Context, accountID, zoneName string) (zoneID string, err error) {
+	zoneName = normalizeZoneName(zoneName)
+
+	cacheKey := accountID + "-" + zoneName
+	if zoneID, ok := c.zoneCache.Load(cacheKey); ok {
+		return zoneID.(string), nil
+	}
+
+	res, err := c.API.ListZonesContext(ctx, cloudflare.WithZoneFilters(zoneName, accountID, ""))
+	if err != nil {
+		return "", fmt.Errorf("ListZonesContext command failed: %w", err)
+	}
+
+	switch len(res.Result) {
+	case 0:
+		return "", errors.New("zone could not be found")
+	case 1:
+		zoneID = res.Result[0].ID
+	default:
+		return "", errors.New("ambiguous zone name; an account ID might help")
+	}
+
+	c.zoneCache.Store(cacheKey, zoneID)
+	return zoneID, nil
+}
+
+func normalizeZoneName(name string) string {
+	if n, err := idna.ToUnicode(name); err == nil {
+		return n
+	}
+	return name
+}
+
+func (c client) CreateDNSRecordForTunnel(
+	ctx context.Context,
+	accountID, tunnelID, domain string,
+	ttl time.Duration,
+) error {
+	domain = normalizeZoneName(domain)
+	zoneName, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		return err
+	}
+
+	zoneID, err := c.getZoneIDFromName(ctx, accountID, zoneName)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.API.CreateDNSRecord(
+		ctx,
+		&cloudflare.ResourceContainer{
+			Identifier: zoneID,
+			Type:       cloudflare.ZoneType,
+		},
+		cloudflare.CreateDNSRecordParams{
+			Type:    "CNAME",
+			Name:    domain,
+			Content: tunnelID,
+			TTL:     int(ttl.Seconds()),
+			Proxied: ptr.To(true),
+		},
+	)
+	return err
 }

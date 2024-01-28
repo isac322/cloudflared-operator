@@ -78,11 +78,15 @@ func (r *TunnelReconciler) reconcileCredential(ctx context.Context, tunnel *v1.T
 		return recordConditionFrom(WrapError(err, v1.CredentialReasonFailedToGetExistingCredential))
 	}
 
-	if dirtyStatus || SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
+	if SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
 		Type:               v1.TunnelConditionTypeCredential,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},
 	}) {
+		dirtyStatus = true
+	}
+
+	if dirtyStatus {
 		return r.Status().Update(ctx, tunnel)
 	}
 	return nil
@@ -154,6 +158,9 @@ func fillCredSecret(
 	}
 
 	delete(credentialSecret.StringData, fileNameCredential)
+	if credentialSecret.Data == nil {
+		credentialSecret.Data = make(map[string][]byte, 1)
+	}
 	credentialSecret.Data[fileNameCredential] = marshaledCredential
 	return credential.TunnelID, nil
 }
@@ -209,21 +216,15 @@ func (r *TunnelReconciler) getCloudflareClient(ctx context.Context, tunnel *v1.T
 	}
 
 	secretKey := ptr.Deref(tunnel.Spec.APITokenSecretRef.Key, apiTokenKey)
-	bytesToken, exists := secret.Data[secretKey]
-	var token string
+	bytesToken, exists := GetDataFromSecret(&secret, secretKey)
 	if !exists {
-		token, exists = secret.StringData[secretKey]
-		if !exists {
-			return nil, WrapError(errNotFoundAPITokenKey, v1.CredentialReasonNoToken)
-		}
-	} else {
-		token = string(bytesToken)
+		return nil, WrapError(errNotFoundAPITokenKey, v1.CredentialReasonNoToken)
 	}
 
-	cli, err := cloudflare.NewClient(token)
+	cli, err := cloudflare.NewClient(string(bytesToken))
 	if err != nil {
-		l.Error(err, "failed to connect to Cloudflare")
-		return nil, WrapError(errNotFoundAPITokenKey, v1.CredentialReasonFailedToConnectCF)
+		l.Error(err, "failed to create Cloudflare client")
+		return nil, WrapError(err, v1.CredentialReasonFailedToConnectCF)
 	}
 	return cli, nil
 }

@@ -186,14 +186,19 @@ func (r *TunnelReconciler) findObjectsForSecret(ctx context.Context, secret clie
 }
 
 func (r *TunnelReconciler) findObjectsForTunnelIngress(
-	ctx context.Context,
+	_ context.Context,
 	tunnelIngress client.Object,
 ) []reconcile.Request {
 	ingress := tunnelIngress.(*v1.TunnelIngress)
 	if ingress.Spec.TunnelRef.Kind != "Tunnel" {
 		return nil
 	}
-	// TODO: ingress.Status 확인하기
+	if GetTunnelIngressCondition(
+		ingress.Status,
+		v1.TunnelIngressConditionTypeDNSRecord,
+	).Status != corev1.ConditionTrue {
+		return nil
+	}
 
 	return []reconcile.Request{{NamespacedName: types.NamespacedName{
 		Name:      ingress.Spec.TunnelRef.Name,
@@ -276,7 +281,7 @@ func (r *TunnelReconciler) buildConditionRecorder(
 	return func(err error) error {
 		cause := err
 		var reason v1.TunnelConditionReason = ""
-		var withReason ErrorWithReason
+		var withReason ErrorWithReason[v1.TunnelConditionReason]
 		if errors.As(err, &withReason) {
 			cause = withReason.Cause()
 			reason = withReason.Reason

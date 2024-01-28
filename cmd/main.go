@@ -100,6 +100,7 @@ func main() {
 	if err = (&controller.TunnelIngressReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Clock:  clock.RealClock{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TunnelIngress")
 		os.Exit(1)

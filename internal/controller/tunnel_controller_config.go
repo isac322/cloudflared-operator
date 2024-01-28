@@ -112,8 +112,8 @@ func (r *TunnelReconciler) buildConfig(ctx context.Context, tunnel *v1.Tunnel) (
 		OriginRequestConfig: v1.OriginRequestConfig{},
 		Ingress:             make([]v1.TunnelConfigIngress, 0, len(ingressList.Items)+1),
 	}
-	for _, binding := range ingressList.Items {
-		config.Ingress = append(config.Ingress, binding.Spec.TunnelConfigIngress)
+	for _, ingress := range ingressList.Items {
+		config.Ingress = append(config.Ingress, ingress.Spec.TunnelConfigIngress)
 	}
 	config.Ingress = append(config.Ingress, v1.TunnelConfigIngress{Service: "http_status:404"})
 

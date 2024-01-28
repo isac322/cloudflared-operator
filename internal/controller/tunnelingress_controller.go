@@ -18,8 +18,14 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -31,6 +37,7 @@ import (
 type TunnelIngressReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Clock  clock.PassiveClock
 }
 
 //+kubebuilder:rbac:groups=cloudflared-operator.bhyoo.com,resources=tunnelingresses,verbs=get;list;watch;create;update;patch;delete
@@ -47,7 +54,33 @@ type TunnelIngressReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *TunnelIngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	l := log.FromContext(ctx)
+
+	var ingress v1.TunnelIngress
+	if err := r.Get(ctx, req.NamespacedName, &ingress); err != nil {
+		l.Error(err, "unable to fetch TunnelIngress")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	switch ingress.Spec.TunnelRef.Kind {
+	case "Tunnel":
+		tunnel, err := r.getTunnelFromIngress(ctx, &ingress)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Tunnel is not found, we'll wait for it to be created
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+			l.Error(err, "unable to fetch Tunnel")
+			return ctrl.Result{}, err
+		}
+		r.reconcileDNSRecord(ctx, &ingress, tunnel)
+
+	default:
+		return ctrl.Result{}, errors.New("unsupported tunnel type")
+	}
 
 	// TODO(user): your logic here
 
@@ -59,4 +92,57 @@ func (r *TunnelIngressReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.TunnelIngress{}).
 		Complete(r)
+}
+
+func (r *TunnelIngressReconciler) buildConditionRecorder(
+	ctx context.Context,
+	ingress *v1.TunnelIngress,
+	condType v1.TunnelIngressConditionType,
+) func(err error) error {
+	return func(err error) error {
+		cause := err
+		var reason v1.TunnelIngressConditionReason = ""
+		var withReason ErrorWithReason[v1.TunnelIngressConditionReason]
+		if errors.As(err, &withReason) {
+			cause = withReason.Cause()
+			reason = withReason.Reason
+		}
+
+		newCond := v1.TunnelIngressStatusCondition{
+			Type:               condType,
+			Status:             corev1.ConditionFalse,
+			Message:            "",
+			Error:              fmt.Sprintf("%+v", cause),
+			LastTransitionTime: metav1.Time{Time: r.Clock.Now()},
+			Reason:             reason,
+		}
+
+		if status, ok := cause.(apierrors.APIStatus); ok || errors.As(cause, &status) {
+			newCond.Error = string(status.Status().Reason)
+			newCond.Message = status.Status().Message
+		}
+
+		if !SetTunnelIngressConditionIfDiff(ingress, newCond) {
+			return cause
+		}
+
+		if updateErr := r.Status().Update(ctx, ingress); updateErr != nil {
+			return errors.Join(cause, updateErr)
+		}
+		return cause
+	}
+}
+
+func (r *TunnelIngressReconciler) getTunnelFromIngress(ctx context.Context, ingress *v1.TunnelIngress) (*v1.Tunnel, error) {
+	if ingress.Spec.TunnelRef.Kind != "Tunnel" {
+		return nil, nil
+	}
+
+	var tunnel v1.Tunnel
+	err := r.Get(ctx, client.ObjectKey{Namespace: ingress.GetNamespace(), Name: ingress.Spec.TunnelRef.Name}, &tunnel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tunnel, nil
 }
