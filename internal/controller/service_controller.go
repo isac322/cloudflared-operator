@@ -38,9 +38,7 @@ type ServiceReconciler struct {
 	Scheme *runtime.Scheme // 리소스의 타입 정보를 관리
 }
 
-// 컨트롤러가 필요로 하는 권한
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
-// TODO: 아래는 무엇인지 확인하기
 //+kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core,resources=services/finalizers,verbs=update
 
@@ -55,12 +53,12 @@ type ServiceReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-
+	instance := &corev1.Service{}
+	if instance != nil {
+		log.Info("service exists", "annotated tunnel name", instance.Annotations["tunnel.name"])
+	}
 	log.Info("Reconciling Service", "service", req.NamespacedName)
-
-	// 나머지 Reconcile 로직...
 	// TODO(user): your logic here
-
 	return ctrl.Result{}, nil
 }
 
@@ -72,7 +70,20 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				oldAnnotations := e.ObjectOld.GetAnnotations()
 				newAnnotations := e.ObjectNew.GetAnnotations()
-				return !reflect.DeepEqual(oldAnnotations, newAnnotations)
+				// if no changes in annotations, return false
+				if reflect.DeepEqual(oldAnnotations, newAnnotations) {
+					return false
+				}
+				if tunnelName, exists := newAnnotations["tunnel.name"]; exists {
+					if len(oldAnnotations["tunnel.name"]) == 0 {
+						return true
+					} else {
+						if tunnelName != oldAnnotations["tunnel.name"] {
+							// TODO: Decide what to do if tunnel.name already exists but updated with diff value
+						}
+					}
+				}
+				return false
 			},
 		}).
 		Complete(r)
