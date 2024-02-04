@@ -28,9 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-const (
-	annotations = ".metadata.annotations"
-)
+const TunnelNameAnnotation = "tunnel.name"
+const HostNameAnnotation = "host.name"
 
 // ServiceReconciler reconciles a Service object
 type ServiceReconciler struct {
@@ -70,21 +69,43 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				oldAnnotations := e.ObjectOld.GetAnnotations()
 				newAnnotations := e.ObjectNew.GetAnnotations()
+
 				// if no changes in annotations, return false
 				if reflect.DeepEqual(oldAnnotations, newAnnotations) {
 					return false
 				}
-				if tunnelName, exists := newAnnotations["tunnel.name"]; exists {
-					if len(oldAnnotations["tunnel.name"]) == 0 {
-						return true
-					} else {
-						if tunnelName != oldAnnotations["tunnel.name"] {
-							// TODO: Decide what to do if tunnel.name already exists but updated with diff value
-						}
-					}
+
+				tunnelName, tunnelNameExists := newAnnotations[TunnelNameAnnotation]
+				hostName, hostNameExists := newAnnotations[HostNameAnnotation]
+
+				// both are required to create a proper TunnelIngress object
+				if !tunnelNameExists || !hostNameExists {
+					return false
 				}
-				return false
+
+				// if changes in annotations is not about the purpose of creating a TunnelIngress object, return false
+				if tunnelName == oldAnnotations[TunnelNameAnnotation] && hostName == oldAnnotations[HostNameAnnotation] {
+					return false
+				}
+				// TODO: check if validation is  needed
+				return true
+			},
+			CreateFunc: func(e event.CreateEvent) bool {
+				annotations := e.Object.GetAnnotations()
+				// check if all required annotations are present
+				_, tunnelNameExists := annotations[TunnelNameAnnotation]
+				hostName, hostNameExists := annotations[HostNameAnnotation]
+				if !tunnelNameExists || !hostNameExists {
+					return false
+				}
+				// TODO: check whether the TunnelIngress name also needs to be verified
+				return ValidateHostName(hostName)
 			},
 		}).
 		Complete(r)
+}
+
+func ValidateHostName(hostName string) bool {
+	// TODO: add host name regex logic
+	return true
 }
