@@ -87,25 +87,18 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				if tunnelName == oldAnnotations[TunnelNameAnnotation] && hostName == oldAnnotations[HostNameAnnotation] {
 					return false
 				}
-				// TODO: check if validation is  needed
 				return true
 			},
 			CreateFunc: func(e event.CreateEvent) bool {
 				annotations := e.Object.GetAnnotations()
 				// check if all required annotations are present
 				_, tunnelNameExists := annotations[TunnelNameAnnotation]
-				hostName, hostNameExists := annotations[HostNameAnnotation]
+				_, hostNameExists := annotations[HostNameAnnotation]
 				if !tunnelNameExists || !hostNameExists {
 					return false
 				}
-				// TODO: check whether the TunnelIngress name also needs to be verified
-				return ValidateHostName(hostName)
+				return true
 			},
 		}).
 		Complete(r)
-}
-
-func ValidateHostName(hostName string) bool {
-	// TODO: add host name regex logic
-	return true
 }
