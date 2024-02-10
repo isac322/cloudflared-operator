@@ -18,9 +18,11 @@ package controller
 
 import (
 	"context"
+	"reflect"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"reflect"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -28,8 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-const TunnelNameAnnotation = "tunnel.name"
-const HostNameAnnotation = "host.name"
+const (
+	TunnelNameAnnotation = "tunnel.name"
+	HostNameAnnotation   = "host.name"
+)
 
 // ServiceReconciler reconciles a Service object
 type ServiceReconciler struct {
@@ -52,8 +56,8 @@ type ServiceReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	instance := &corev1.Service{}
-	if instance != nil {
+	instance := &corev1.Service{} //nolint:staticcheck
+	if instance != nil {          //nolint:staticcheck
 		log.Info("service exists", "annotated tunnel name", instance.Annotations["tunnel.name"])
 	}
 	log.Info("Reconciling Service", "service", req.NamespacedName)

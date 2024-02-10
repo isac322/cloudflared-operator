@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Conventional Commit In Pull Requests
+        uses: ytanikin/PRConventionalCommits@1.1.0
+        with:
+          task_types: '["docs", "feat", "fix", "refactor", "test", "chore", "ci", "build", "perf", "revert", "style"]'
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.55.2
+
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Load buildkit state
+        uses: isac322/buildkit-state@v2
+        with:
+          buildx-name: ${{ steps.buildx.outputs.name }}
+
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          push: false
+          platforms: |
+            linux/arm64/v8
+            linux/arm/v7
+            linux/amd64
+            linux/ppc64le
