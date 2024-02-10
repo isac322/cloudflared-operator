@@ -18,9 +18,7 @@ import (
 	"github.com/isac322/cloudflared-operator/internal/cloudflare"
 )
 
-var (
-	errNotFoundAPITokenKey = errors.New("api token key is not found")
-)
+var errNotFoundAPITokenKey = errors.New("api token key is not found")
 
 func (r *TunnelReconciler) reconcileCredential(ctx context.Context, tunnel *v1.Tunnel) error {
 	recordConditionFrom := r.buildConditionRecorder(ctx, tunnel, v1.TunnelConditionTypeCredential)

@@ -193,10 +193,11 @@ func (r *TunnelReconciler) findObjectsForTunnelIngress(
 	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil
 	}
-	if GetTunnelIngressCondition(
+	ingressCondition := GetTunnelIngressCondition(
 		ingress.Status,
 		v1.TunnelIngressConditionTypeDNSRecord,
-	).Status != corev1.ConditionTrue {
+	)
+	if ingressCondition == nil || ingressCondition.Status != corev1.ConditionTrue {
 		return nil
 	}
 
@@ -278,10 +279,17 @@ func (r *TunnelReconciler) buildConditionRecorder(
 	tunnel *v1.Tunnel,
 	condType v1.TunnelConditionType,
 ) func(err error) error {
-	return func(err error) error {
-		cause := err
+	return func(err error) (cause error) {
+		defer func() {
+			if errors.Is(err, reconcile.TerminalError(nil)) &&
+				!errors.Is(cause, reconcile.TerminalError(nil)) {
+				cause = reconcile.TerminalError(cause)
+			}
+		}()
+
+		cause = err
 		var reason v1.TunnelConditionReason = ""
-		var withReason ErrorWithReason[v1.TunnelConditionReason]
+		var withReason ReasonedError[v1.TunnelConditionReason]
 		if errors.As(err, &withReason) {
 			cause = withReason.Cause()
 			reason = withReason.Reason

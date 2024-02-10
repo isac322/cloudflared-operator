@@ -67,7 +67,7 @@ type TunnelRunParameters struct {
 
 	// Metrics sets the address for exposing the metrics reporting endpoint.
 	// +optional
-	//Metrics *string `json:"metrics,omitempty"`
+	// Metrics *string `json:"metrics,omitempty"`
 
 	// NoAutoupdate indicates whether autoupdates are disabled.
 	//
