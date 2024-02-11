@@ -133,6 +133,7 @@ func buildDaemon(ctx context.Context, tunnel *v1.Tunnel) (client.Object, string,
 			return nil, "", fmt.Errorf("invalid daemon version: %s", version)
 		}
 	}
+	image := "cloudflare/cloudflared:" + version
 
 	var terminationGracePeriodSeconds *int64
 	if tunnel.Spec.TunnelRunParameters != nil && tunnel.Spec.TunnelRunParameters.GracePeriod != nil {
@@ -174,7 +175,7 @@ func buildDaemon(ctx context.Context, tunnel *v1.Tunnel) (client.Object, string,
 			InitContainers: nil,
 			Containers: []corev1.Container{{
 				Name:    "cloudflared",
-				Image:   "cloudflare/cloudflared",
+				Image:   image,
 				Command: nil,
 				Args: []string{
 					"tunnel",
