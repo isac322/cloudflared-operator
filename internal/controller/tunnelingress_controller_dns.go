@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -40,12 +39,13 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 		return recordConditionFrom(err)
 	}
 
-	ttl := time.Second
-	if ingress.Spec.DNSRecordTTL != nil {
-		ttl = (*ingress.Spec.DNSRecordTTL).Duration
-	}
-
-	err = cfClient.CreateDNSRecordIfNotExists(ctx, tunnel.Spec.AccountID, tunnel.Status.TunnelID, *targetDomain, ttl)
+	err = cfClient.CreateRoute(
+		ctx,
+		tunnel.Spec.AccountID,
+		tunnel.Status.TunnelID,
+		*targetDomain,
+		ingress.Spec.OverwriteExistingDNS,
+	)
 	if err != nil {
 		return recordConditionFrom(WrapError(err, v1.DNSRecordReasonFailedToCreateRecord))
 	}
