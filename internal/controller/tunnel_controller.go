@@ -103,7 +103,8 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileConfig(ctx, &tunnel); err != nil {
+	tunnelConfig, err := r.reconcileConfig(ctx, &tunnel)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 	configCond := GetTunnelCondition(tunnel.Status, v1.TunnelConditionTypeConfig)
@@ -113,7 +114,7 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDaemon(ctx, &tunnel); err != nil {
+	if err := r.reconcileDaemon(ctx, &tunnel, tunnelConfig); err != nil {
 		return ctrl.Result{}, err
 	}
 
