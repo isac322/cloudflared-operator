@@ -6,14 +6,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/goccy/go-json"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 	"k8s.io/utils/ptr"
+	"net/http"
+	"sync"
 )
 
 const (
@@ -29,7 +28,7 @@ type TunnelCredential struct {
 type Client interface {
 	ValidateTunnelCredential(ctx context.Context, credential TunnelCredential) (bool, error)
 	GetOrCreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
-	CreateDNSRecordIfNotExists(ctx context.Context, accountID, tunnelID, domain string, ttl time.Duration) error
+	CreateRoute(ctx context.Context, accountID, tunnelID, domain string, overwrite bool) error
 }
 
 type client struct {
@@ -167,10 +166,10 @@ func normalizeZoneName(name string) string {
 	return name
 }
 
-func (c client) CreateDNSRecordIfNotExists(
+func (c client) CreateRoute(
 	ctx context.Context,
 	accountID, tunnelID, domain string,
-	ttl time.Duration,
+	overwrite bool,
 ) error {
 	domain = normalizeZoneName(domain)
 	zoneName, err := publicsuffix.EffectiveTLDPlusOne(domain)
@@ -183,23 +182,20 @@ func (c client) CreateDNSRecordIfNotExists(
 		return err
 	}
 
-	_, err = c.API.CreateDNSRecord(
+	_, err = c.API.Raw(
 		ctx,
-		&cloudflare.ResourceContainer{
-			Identifier: zoneID,
-			Type:       cloudflare.ZoneType,
+		http.MethodPut,
+		"/zones/"+zoneID+"/tunnels/"+tunnelID+"/routes",
+		struct {
+			Type              string `json:"type"`
+			UserHostname      string `json:"user_hostname"`
+			OverwriteExisting bool   `json:"overwrite_existing"`
+		}{
+			Type:              "dns",
+			UserHostname:      domain,
+			OverwriteExisting: overwrite,
 		},
-		cloudflare.CreateDNSRecordParams{
-			Type:    "CNAME",
-			Name:    domain,
-			Content: tunnelID,
-			TTL:     int(ttl.Seconds()),
-			Proxied: ptr.To(true),
-		},
+		nil,
 	)
-	if cfErr, ok := err.(*cloudflare.RequestError); (ok || errors.As(err, &cfErr)) &&
-		cfErr.InternalErrorCodeIs(81053) {
-		return nil
-	}
 	return err
 }

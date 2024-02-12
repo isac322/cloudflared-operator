@@ -46,7 +46,7 @@ type TunnelIngressSpec struct {
 	TunnelRef TunnelRef `json:"tunnelRef"`
 
 	// +optional
-	DNSRecordTTL *metav1.Duration `json:"dnsRecordTTL,omitempty"`
+	OverwriteExistingDNS bool `json:"overwriteExistingDNS,omitempty"`
 }
 
 // TunnelIngressConditionType ...
