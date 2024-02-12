@@ -47,11 +47,11 @@ func (r *TunnelReconciler) reconcileDaemon(ctx context.Context, tunnel *v1.Tunne
 	if err != nil {
 		return recordConditionFrom(WrapError(err, v1.DaemonReasonFailedToDeploy))
 	}
+	if err = ctrl.SetControllerReference(tunnel, newTarget, r.Scheme); err != nil {
+		return recordConditionFrom(WrapError(err, v1.DaemonReasonFailedToDeploy))
+	}
 
 	if target != nil {
-		if err = ctrl.SetControllerReference(tunnel, newTarget, r.Scheme); err != nil {
-			return recordConditionFrom(WrapError(err, v1.DaemonReasonFailedToDeploy))
-		}
 		if err = r.Update(ctx, newTarget, client.DryRunAll); err != nil {
 			return recordConditionFrom(WrapError(err, v1.DaemonReasonFailedToDeploy))
 		}
