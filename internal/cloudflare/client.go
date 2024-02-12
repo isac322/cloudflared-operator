@@ -6,13 +6,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
+	"sync"
+
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/goccy/go-json"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 	"k8s.io/utils/ptr"
-	"net/http"
-	"sync"
 )
 
 const (
