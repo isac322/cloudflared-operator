@@ -167,6 +167,7 @@ spec:
                       - Creating
                       - NoToken
                       - FailedToConnectCloudflare
+                      - FailedToCreateRecord
                       type: string
                     status:
                       description: |-

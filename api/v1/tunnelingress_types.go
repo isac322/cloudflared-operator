@@ -60,7 +60,7 @@ const (
 )
 
 // TunnelIngressConditionReason ...
-// +kubebuilder:validation:Enum=Creating;NoToken;FailedToConnectCloudflare
+// +kubebuilder:validation:Enum=Creating;NoToken;FailedToConnectCloudflare;FailedToCreateRecord
 type TunnelIngressConditionReason string
 
 const (
