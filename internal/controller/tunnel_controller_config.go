@@ -83,7 +83,7 @@ func (r *TunnelReconciler) reconcileConfig(ctx context.Context, tunnel *v1.Tunne
 		return TunnelConfig{}, recordConditionFrom(WrapError(err, v1.ConfigReasonFailedToGetExistingConfig))
 	}
 
-	if SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
+	if UpdateConditionIfChanged(&tunnel.Status, v1.TunnelStatusCondition{
 		Type:               v1.TunnelConditionTypeConfig,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},

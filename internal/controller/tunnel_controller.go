@@ -96,7 +96,7 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err := r.reconcileCredential(ctx, &tunnel); err != nil {
 		return ctrl.Result{}, err
 	}
-	credCond := GetTunnelCondition(tunnel.Status, v1.TunnelConditionTypeCredential)
+	credCond := tunnel.Status.GetCondition(v1.TunnelConditionTypeCredential)
 	if credCond.Status != corev1.ConditionTrue {
 		err := errors.New("inconsistent state")
 		l.Error(err, "credential reconciling was succeed with error")
@@ -107,7 +107,7 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	configCond := GetTunnelCondition(tunnel.Status, v1.TunnelConditionTypeConfig)
+	configCond := tunnel.Status.GetCondition(v1.TunnelConditionTypeConfig)
 	if configCond.Status != corev1.ConditionTrue {
 		err := errors.New("inconsistent state")
 		l.Error(err, "config reconciling was succeed with error")
@@ -194,11 +194,8 @@ func (r *TunnelReconciler) findObjectsForTunnelIngress(
 	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil
 	}
-	ingressCondition := GetTunnelIngressCondition(
-		ingress.Status,
-		v1.TunnelIngressConditionTypeDNSRecord,
-	)
-	if ingressCondition == nil || ingressCondition.Status != corev1.ConditionTrue {
+	ingressCondition := ingress.Status.GetCondition(v1.TunnelIngressConditionTypeDNSRecord)
+	if ingressCondition.Status != corev1.ConditionTrue {
 		return nil
 	}
 
@@ -310,7 +307,7 @@ func (r *TunnelReconciler) buildConditionRecorder(
 			newCond.Message = status.Status().Message
 		}
 
-		if !SetTunnelConditionIfDiff(tunnel, newCond) {
+		if !UpdateConditionIfChanged(&tunnel.Status, newCond) {
 			return cause
 		}
 
@@ -326,7 +323,7 @@ func (r *TunnelReconciler) updateConditionIfDiff(
 	tunnel *v1.Tunnel,
 	cond v1.TunnelStatusCondition,
 ) error {
-	if SetTunnelConditionIfDiff(tunnel, cond) {
+	if UpdateConditionIfChanged(&tunnel.Status, cond) {
 		return r.Status().Update(ctx, tunnel)
 	}
 	return nil

@@ -24,7 +24,7 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 
 	targetDomain := ingress.Spec.Hostname
 	if targetDomain == nil {
-		if SetTunnelIngressConditionIfDiff(ingress, v1.TunnelIngressStatusCondition{
+		if UpdateConditionIfChanged(&ingress.Status, v1.TunnelIngressStatusCondition{
 			Type:               v1.TunnelIngressConditionTypeDNSRecord,
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: metav1.Time{Time: r.Clock.Now()},
@@ -50,7 +50,7 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 		return recordConditionFrom(WrapError(err, v1.DNSRecordReasonFailedToCreateRecord))
 	}
 
-	if SetTunnelIngressConditionIfDiff(ingress, v1.TunnelIngressStatusCondition{
+	if UpdateConditionIfChanged(&ingress.Status, v1.TunnelIngressStatusCondition{
 		Type:               v1.TunnelIngressConditionTypeDNSRecord,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},

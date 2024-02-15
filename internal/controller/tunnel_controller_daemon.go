@@ -67,7 +67,7 @@ func (r *TunnelReconciler) reconcileDaemon(ctx context.Context, tunnel *v1.Tunne
 		}
 	}
 
-	if SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
+	if UpdateConditionIfChanged(&tunnel.Status, v1.TunnelStatusCondition{
 		Type:               v1.TunnelConditionTypeDaemon,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},

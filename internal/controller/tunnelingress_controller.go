@@ -125,7 +125,7 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 			newCond.Message = status.Status().Message
 		}
 
-		if !SetTunnelIngressConditionIfDiff(ingress, newCond) {
+		if !UpdateConditionIfChanged(&ingress.Status, newCond) {
 			return cause
 		}
 
