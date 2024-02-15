@@ -88,11 +88,6 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.initStatus(ctx, &tunnel); err != nil {
-		l.Error(err, "failed to initiate tunnal status")
-		return ctrl.Result{}, err
-	}
-
 	if err := r.reconcileCredential(ctx, &tunnel); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -119,46 +114,6 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *TunnelReconciler) initStatus(ctx context.Context, tunnel *v1.Tunnel) error {
-	var daemon, cred, config *v1.TunnelStatusCondition
-
-	for i := range tunnel.Status.Conditions {
-		switch tunnel.Status.Conditions[i].Type {
-		case v1.TunnelConditionTypeDaemon:
-			daemon = &tunnel.Status.Conditions[i]
-		case v1.TunnelConditionTypeCredential:
-			cred = &tunnel.Status.Conditions[i]
-		case v1.TunnelConditionTypeConfig:
-			config = &tunnel.Status.Conditions[i]
-		}
-	}
-	if daemon != nil && cred != nil && config != nil {
-		return nil
-	}
-
-	if daemon == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeDaemon,
-			Status: corev1.ConditionFalse,
-			Reason: v1.DaemonReasonCredentialRequired,
-		})
-	}
-	if cred == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeCredential,
-			Status: corev1.ConditionUnknown,
-		})
-	}
-	if config == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeConfig,
-			Status: corev1.ConditionUnknown,
-		})
-	}
-
-	return r.Status().Update(ctx, tunnel)
 }
 
 func (r *TunnelReconciler) findObjectsForSecret(ctx context.Context, secret client.Object) []reconcile.Request {
