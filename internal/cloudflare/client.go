@@ -30,6 +30,7 @@ type Client interface {
 	ValidateTunnelCredential(ctx context.Context, credential TunnelCredential) (bool, error)
 	GetOrCreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
 	CreateRoute(ctx context.Context, accountID, tunnelID, domain string, overwrite bool) error
+	DeleteTunnel(ctx context.Context, accountID, tunnelID string) error
 }
 
 type client struct {
@@ -196,6 +197,17 @@ func (c client) CreateRoute(
 			UserHostname:      domain,
 			OverwriteExisting: overwrite,
 		},
+		nil,
+	)
+	return err
+}
+
+func (c client) DeleteTunnel(ctx context.Context, accountID, tunnelID string) error {
+	_, err := c.API.Raw(
+		ctx,
+		http.MethodDelete,
+		"/accounts/"+accountID+"/cfd_tunnel/"+tunnelID+"?cascade=true",
+		nil,
 		nil,
 	)
 	return err
