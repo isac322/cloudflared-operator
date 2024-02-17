@@ -32,6 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -47,6 +48,8 @@ const (
 	tunnelRefKindField = ".spec.tunnelRef.kind"
 	fileNameCredential = "credential.json"
 	fileNameConfig     = "config.yaml"
+
+	tunnelFinalizerName = "tunnel.cloudflared-operator.bhyoo.com/finalizer"
 )
 
 // TunnelReconciler reconciles a Tunnel object
@@ -86,6 +89,33 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if !tunnel.DeletionTimestamp.IsZero() {
+		if !controllerutil.ContainsFinalizer(&tunnel, tunnelFinalizerName) {
+			return ctrl.Result{}, nil
+		}
+		if err := r.deleteTunnel(ctx, &tunnel); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried.
+			return ctrl.Result{}, err
+		}
+
+		if controllerutil.RemoveFinalizer(&tunnel, tunnelFinalizerName) {
+			return ctrl.Result{}, r.Update(ctx, &tunnel)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object. This is equivalent
+	// to registering our finalizer.
+	if !controllerutil.ContainsFinalizer(&tunnel, tunnelFinalizerName) {
+		controllerutil.AddFinalizer(&tunnel, tunnelFinalizerName)
+		if err := r.Update(ctx, &tunnel); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if err := r.reconcileCredential(ctx, &tunnel); err != nil {
