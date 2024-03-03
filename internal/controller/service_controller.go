@@ -69,16 +69,27 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	annotations := service.Annotations
 	hostName := annotations[HostNameAnnotation]
 	ports := service.Spec.Ports
-	tunnelName := ""
 	var tunnel v1.Tunnel
 
 	for _, port := range ports {
-		tunnelName = annotations[PortTunnelMappingAnnotation+port.Name]
+		tunnelName := annotations[PortTunnelMappingAnnotation+port.Name]
 		if err := r.Get(ctx, client.ObjectKey{Name: tunnelName, Namespace: service.Namespace}, &tunnel); err != nil {
 			logger.Error(err, "No such Tunnel object exists with given name")
 			continue
 		}
 		tunnelIngress := createTunnelIngress(tunnelName, hostName, service, port)
+		if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
+			// TODO: error handling
+			return ctrl.Result{}, err
+		}
+		if err := ctrl.SetControllerReference(&service, tunnelIngress, r.Scheme); err != nil {
+			// TODO: error handling
+			return ctrl.Result{}, err
+		}
+		if err := r.Update(ctx, tunnelIngress); err != nil {
+			// TODO: error handling
+			return ctrl.Result{}, err
+		}
 		if err := r.Create(ctx, tunnelIngress); err != nil {
 			logger.Error(err, "Failed to create TunnelIngress")
 			return ctrl.Result{}, err
