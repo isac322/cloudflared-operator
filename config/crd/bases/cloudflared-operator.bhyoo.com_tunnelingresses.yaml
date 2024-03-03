@@ -39,8 +39,6 @@ spec:
           spec:
             description: TunnelIngressSpec defines the desired state of TunnelIngress
             properties:
-              dnsRecordTTL:
-                type: string
               hostname:
                 type: string
               originRequest:
@@ -121,6 +119,8 @@ spec:
                     description: TLSTimeout is the timeout for TLS connections.
                     type: string
                 type: object
+              overwriteExistingDNS:
+                type: boolean
               path:
                 type: string
               service:
@@ -167,6 +167,7 @@ spec:
                       - Creating
                       - NoToken
                       - FailedToConnectCloudflare
+                      - FailedToCreateRecord
                       type: string
                     status:
                       description: |-

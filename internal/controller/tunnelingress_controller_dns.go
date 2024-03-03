@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,7 +24,7 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 
 	targetDomain := ingress.Spec.Hostname
 	if targetDomain == nil {
-		if SetTunnelIngressConditionIfDiff(ingress, v1.TunnelIngressStatusCondition{
+		if UpdateConditionIfChanged(&ingress.Status, v1.TunnelIngressStatusCondition{
 			Type:               v1.TunnelIngressConditionTypeDNSRecord,
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: metav1.Time{Time: r.Clock.Now()},
@@ -40,17 +39,18 @@ func (r *TunnelIngressReconciler) reconcileDNSRecord(
 		return recordConditionFrom(err)
 	}
 
-	ttl := time.Second
-	if ingress.Spec.DNSRecordTTL != nil {
-		ttl = (*ingress.Spec.DNSRecordTTL).Duration
-	}
-
-	err = cfClient.CreateDNSRecordIfNotExists(ctx, tunnel.Spec.AccountID, tunnel.Status.TunnelID, *targetDomain, ttl)
+	err = cfClient.CreateRoute(
+		ctx,
+		tunnel.Spec.AccountID,
+		tunnel.Status.TunnelID,
+		*targetDomain,
+		ingress.Spec.OverwriteExistingDNS,
+	)
 	if err != nil {
 		return recordConditionFrom(WrapError(err, v1.DNSRecordReasonFailedToCreateRecord))
 	}
 
-	if SetTunnelIngressConditionIfDiff(ingress, v1.TunnelIngressStatusCondition{
+	if UpdateConditionIfChanged(&ingress.Status, v1.TunnelIngressStatusCondition{
 		Type:               v1.TunnelIngressConditionTypeDNSRecord,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},

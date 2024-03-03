@@ -32,6 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -47,6 +48,8 @@ const (
 	tunnelRefKindField = ".spec.tunnelRef.kind"
 	fileNameCredential = "credential.json"
 	fileNameConfig     = "config.yaml"
+
+	tunnelFinalizerName = "tunnel.cloudflared-operator.bhyoo.com/finalizer"
 )
 
 // TunnelReconciler reconciles a Tunnel object
@@ -88,76 +91,59 @@ func (r *TunnelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := r.initStatus(ctx, &tunnel); err != nil {
-		l.Error(err, "failed to initiate tunnal status")
-		return ctrl.Result{}, err
+	// examine DeletionTimestamp to determine if object is under deletion
+	if !tunnel.DeletionTimestamp.IsZero() {
+		if !controllerutil.ContainsFinalizer(&tunnel, tunnelFinalizerName) {
+			return ctrl.Result{}, nil
+		}
+		if err := r.deleteTunnel(ctx, &tunnel); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried.
+			return ctrl.Result{}, err
+		}
+
+		if controllerutil.RemoveFinalizer(&tunnel, tunnelFinalizerName) {
+			return ctrl.Result{}, r.Update(ctx, &tunnel)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object. This is equivalent
+	// to registering our finalizer.
+	if !controllerutil.ContainsFinalizer(&tunnel, tunnelFinalizerName) {
+		controllerutil.AddFinalizer(&tunnel, tunnelFinalizerName)
+		if err := r.Update(ctx, &tunnel); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if err := r.reconcileCredential(ctx, &tunnel); err != nil {
 		return ctrl.Result{}, err
 	}
-	credCond := GetTunnelCondition(tunnel.Status, v1.TunnelConditionTypeCredential)
+	credCond := tunnel.Status.GetCondition(v1.TunnelConditionTypeCredential)
 	if credCond.Status != corev1.ConditionTrue {
 		err := errors.New("inconsistent state")
 		l.Error(err, "credential reconciling was succeed with error")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileConfig(ctx, &tunnel); err != nil {
+	tunnelConfig, err := r.reconcileConfig(ctx, &tunnel)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	configCond := GetTunnelCondition(tunnel.Status, v1.TunnelConditionTypeConfig)
+	configCond := tunnel.Status.GetCondition(v1.TunnelConditionTypeConfig)
 	if configCond.Status != corev1.ConditionTrue {
 		err := errors.New("inconsistent state")
 		l.Error(err, "config reconciling was succeed with error")
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDaemon(ctx, &tunnel); err != nil {
+	if err := r.reconcileDaemon(ctx, &tunnel, tunnelConfig); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *TunnelReconciler) initStatus(ctx context.Context, tunnel *v1.Tunnel) error {
-	var daemon, cred, config *v1.TunnelStatusCondition
-
-	for i := range tunnel.Status.Conditions {
-		switch tunnel.Status.Conditions[i].Type {
-		case v1.TunnelConditionTypeDaemon:
-			daemon = &tunnel.Status.Conditions[i]
-		case v1.TunnelConditionTypeCredential:
-			cred = &tunnel.Status.Conditions[i]
-		case v1.TunnelConditionTypeConfig:
-			config = &tunnel.Status.Conditions[i]
-		}
-	}
-	if daemon != nil && cred != nil && config != nil {
-		return nil
-	}
-
-	if daemon == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeDaemon,
-			Status: corev1.ConditionFalse,
-			Reason: v1.DaemonReasonCredentialRequired,
-		})
-	}
-	if cred == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeCredential,
-			Status: corev1.ConditionUnknown,
-		})
-	}
-	if config == nil {
-		tunnel.Status.Conditions = append(tunnel.Status.Conditions, v1.TunnelStatusCondition{
-			Type:   v1.TunnelConditionTypeConfig,
-			Status: corev1.ConditionUnknown,
-		})
-	}
-
-	return r.Status().Update(ctx, tunnel)
 }
 
 func (r *TunnelReconciler) findObjectsForSecret(ctx context.Context, secret client.Object) []reconcile.Request {
@@ -193,11 +179,8 @@ func (r *TunnelReconciler) findObjectsForTunnelIngress(
 	if ingress.Spec.TunnelRef.Kind != v1.TunnelKindTunnel {
 		return nil
 	}
-	ingressCondition := GetTunnelIngressCondition(
-		ingress.Status,
-		v1.TunnelIngressConditionTypeDNSRecord,
-	)
-	if ingressCondition == nil || ingressCondition.Status != corev1.ConditionTrue {
+	ingressCondition := ingress.Status.GetCondition(v1.TunnelIngressConditionTypeDNSRecord)
+	if ingressCondition.Status != corev1.ConditionTrue {
 		return nil
 	}
 
@@ -289,7 +272,7 @@ func (r *TunnelReconciler) buildConditionRecorder(
 
 		cause = err
 		var reason v1.TunnelConditionReason = ""
-		var withReason ErrorWithReason[v1.TunnelConditionReason]
+		var withReason ReasonedError[v1.TunnelConditionReason]
 		if errors.As(err, &withReason) {
 			cause = withReason.Cause()
 			reason = withReason.Reason
@@ -309,7 +292,7 @@ func (r *TunnelReconciler) buildConditionRecorder(
 			newCond.Message = status.Status().Message
 		}
 
-		if !SetTunnelConditionIfDiff(tunnel, newCond) {
+		if !UpdateConditionIfChanged(&tunnel.Status, newCond) {
 			return cause
 		}
 
@@ -325,7 +308,7 @@ func (r *TunnelReconciler) updateConditionIfDiff(
 	tunnel *v1.Tunnel,
 	cond v1.TunnelStatusCondition,
 ) error {
-	if SetTunnelConditionIfDiff(tunnel, cond) {
+	if UpdateConditionIfChanged(&tunnel.Status, cond) {
 		return r.Status().Update(ctx, tunnel)
 	}
 	return nil

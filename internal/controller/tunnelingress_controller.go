@@ -28,11 +28,14 @@ import (
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	v1 "github.com/isac322/cloudflared-operator/api/v1"
 )
+
+const tunnelIngressFinalizerName = "tunnelingress.cloudflared-operator.bhyoo.com/finalizer"
 
 // TunnelIngressReconciler reconciles a TunnelIngress object
 type TunnelIngressReconciler struct {
@@ -62,6 +65,33 @@ func (r *TunnelIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// examine DeletionTimestamp to determine if object is under deletion
+	if !ingress.DeletionTimestamp.IsZero() {
+		if !controllerutil.ContainsFinalizer(&ingress, tunnelIngressFinalizerName) {
+			return ctrl.Result{}, nil
+		}
+		if err := r.deleteTunnelIngress(ctx, &ingress); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried.
+			return ctrl.Result{}, err
+		}
+
+		if controllerutil.RemoveFinalizer(&ingress, tunnelIngressFinalizerName) {
+			return ctrl.Result{}, r.Update(ctx, &ingress)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object. This is equivalent
+	// to registering our finalizer.
+	if !controllerutil.ContainsFinalizer(&ingress, tunnelIngressFinalizerName) {
+		controllerutil.AddFinalizer(&ingress, tunnelIngressFinalizerName)
+		if err := r.Update(ctx, &ingress); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	switch ingress.Spec.TunnelRef.Kind {
 	case v1.TunnelKindTunnel:
 		tunnel, err := r.getTunnelFromIngress(ctx, &ingress)
@@ -71,6 +101,14 @@ func (r *TunnelIngressReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 			l.Error(err, "unable to fetch Tunnel")
+			return ctrl.Result{}, err
+		}
+		if err := ctrl.SetControllerReference(tunnel, &ingress, r.Scheme); err != nil {
+			// TODO: error handling
+			return ctrl.Result{}, err
+		}
+		if err := r.Update(ctx, &ingress); err != nil {
+			// TODO: error handling
 			return ctrl.Result{}, err
 		}
 		if err = r.reconcileDNSRecord(ctx, &ingress, tunnel); err != nil {
@@ -105,7 +143,7 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 
 		cause = err
 		var reason v1.TunnelIngressConditionReason = ""
-		var withReason ErrorWithReason[v1.TunnelIngressConditionReason]
+		var withReason ReasonedError[v1.TunnelIngressConditionReason]
 		if errors.As(err, &withReason) {
 			cause = withReason.Cause()
 			reason = withReason.Reason
@@ -125,7 +163,7 @@ func (r *TunnelIngressReconciler) buildConditionRecorder(
 			newCond.Message = status.Status().Message
 		}
 
-		if !SetTunnelIngressConditionIfDiff(ingress, newCond) {
+		if !UpdateConditionIfChanged(&ingress.Status, newCond) {
 			return cause
 		}
 

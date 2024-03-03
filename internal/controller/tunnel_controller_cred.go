@@ -18,9 +18,7 @@ import (
 	"github.com/isac322/cloudflared-operator/internal/cloudflare"
 )
 
-var (
-	errNotFoundAPITokenKey = errors.New("api token key is not found")
-)
+var errNotFoundAPITokenKey = errors.New("api token key is not found")
 
 func (r *TunnelReconciler) reconcileCredential(ctx context.Context, tunnel *v1.Tunnel) error {
 	recordConditionFrom := r.buildConditionRecorder(ctx, tunnel, v1.TunnelConditionTypeCredential)
@@ -78,7 +76,7 @@ func (r *TunnelReconciler) reconcileCredential(ctx context.Context, tunnel *v1.T
 		return recordConditionFrom(WrapError(err, v1.CredentialReasonFailedToGetExistingCredential))
 	}
 
-	if SetTunnelConditionIfDiff(tunnel, v1.TunnelStatusCondition{
+	if UpdateConditionIfChanged(&tunnel.Status, v1.TunnelStatusCondition{
 		Type:               v1.TunnelConditionTypeCredential,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Time{Time: r.Clock.Now()},

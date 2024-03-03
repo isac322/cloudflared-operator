@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"slices"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -67,7 +69,7 @@ type TunnelRunParameters struct {
 
 	// Metrics sets the address for exposing the metrics reporting endpoint.
 	// +optional
-	//Metrics *string `json:"metrics,omitempty"`
+	// Metrics *string `json:"metrics,omitempty"`
 
 	// NoAutoupdate indicates whether autoupdates are disabled.
 	//
@@ -227,6 +229,10 @@ type TunnelStatusCondition struct {
 	Reason TunnelConditionReason `json:"reason,omitempty"`
 }
 
+func (c TunnelStatusCondition) GetConditionType() TunnelConditionType {
+	return c.Type
+}
+
 func (c TunnelStatusCondition) Equals(o TunnelStatusCondition) bool {
 	return c.Type == o.Type && c.Status == o.Status && c.Message == o.Message &&
 		c.Error == o.Error && c.Reason == o.Reason
@@ -241,6 +247,26 @@ type TunnelStatus struct {
 
 	// +optional
 	DaemonVersion string `json:"daemonVersion,omitempty"`
+}
+
+func (s *TunnelStatus) GetCondition(condType TunnelConditionType) TunnelStatusCondition {
+	for i := range s.Conditions {
+		if s.Conditions[i].Type == condType {
+			return s.Conditions[i]
+		}
+	}
+	return TunnelStatusCondition{}
+}
+
+func (s *TunnelStatus) SetCondition(condition TunnelStatusCondition) {
+	idx := slices.IndexFunc(s.Conditions, func(c TunnelStatusCondition) bool {
+		return c.Type == condition.Type
+	})
+	if idx == -1 {
+		s.Conditions = append(s.Conditions, condition)
+	} else {
+		s.Conditions[idx] = condition
+	}
 }
 
 // Tunnel is the Schema for the tunnels API

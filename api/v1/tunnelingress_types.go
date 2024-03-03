@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"slices"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -46,7 +48,7 @@ type TunnelIngressSpec struct {
 	TunnelRef TunnelRef `json:"tunnelRef"`
 
 	// +optional
-	DNSRecordTTL *metav1.Duration `json:"dnsRecordTTL,omitempty"`
+	OverwriteExistingDNS bool `json:"overwriteExistingDNS,omitempty"`
 }
 
 // TunnelIngressConditionType ...
@@ -58,7 +60,7 @@ const (
 )
 
 // TunnelIngressConditionReason ...
-// +kubebuilder:validation:Enum=Creating;NoToken;FailedToConnectCloudflare
+// +kubebuilder:validation:Enum=Creating;NoToken;FailedToConnectCloudflare;FailedToCreateRecord
 type TunnelIngressConditionReason string
 
 const (
@@ -94,6 +96,10 @@ type TunnelIngressStatusCondition struct {
 	Reason TunnelIngressConditionReason `json:"reason,omitempty"`
 }
 
+func (c TunnelIngressStatusCondition) GetConditionType() TunnelIngressConditionType {
+	return c.Type
+}
+
 func (c TunnelIngressStatusCondition) Equals(o TunnelIngressStatusCondition) bool {
 	return c.Type == o.Type && c.Status == o.Status && c.Message == o.Message &&
 		c.Error == o.Error && c.Reason == o.Reason
@@ -102,6 +108,26 @@ func (c TunnelIngressStatusCondition) Equals(o TunnelIngressStatusCondition) boo
 // TunnelIngressStatus defines the observed state of TunnelIngress
 type TunnelIngressStatus struct {
 	Conditions []TunnelIngressStatusCondition `json:"conditions,omitempty"`
+}
+
+func (s *TunnelIngressStatus) GetCondition(condType TunnelIngressConditionType) TunnelIngressStatusCondition {
+	for i := range s.Conditions {
+		if s.Conditions[i].Type == condType {
+			return s.Conditions[i]
+		}
+	}
+	return TunnelIngressStatusCondition{}
+}
+
+func (s *TunnelIngressStatus) SetCondition(condition TunnelIngressStatusCondition) {
+	idx := slices.IndexFunc(s.Conditions, func(c TunnelIngressStatusCondition) bool {
+		return c.Type == condition.Type
+	})
+	if idx == -1 {
+		s.Conditions = append(s.Conditions, condition)
+	} else {
+		s.Conditions[idx] = condition
+	}
 }
 
 //+kubebuilder:object:root=true
