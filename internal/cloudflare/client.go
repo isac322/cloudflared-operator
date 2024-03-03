@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-json"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/utils/ptr"
 )
 
@@ -31,6 +32,7 @@ type Client interface {
 	GetOrCreateTunnel(ctx context.Context, accountID, name string) (TunnelCredential, error)
 	CreateRoute(ctx context.Context, accountID, tunnelID, domain string, overwrite bool) error
 	DeleteTunnel(ctx context.Context, accountID, tunnelID string) error
+	DeleteDNSRecord(ctx context.Context, accountID, domain string) error
 }
 
 type client struct {
@@ -211,4 +213,47 @@ func (c client) DeleteTunnel(ctx context.Context, accountID, tunnelID string) er
 		nil,
 	)
 	return err
+}
+
+func (c client) DeleteDNSRecord(ctx context.Context, accountID, domain string) error {
+	zoneName, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		return err
+	}
+
+	zoneID, err := c.getZoneIDFromName(ctx, accountID, zoneName)
+	if err != nil {
+		return err
+	}
+
+	punycodeDomain, err := idna.ToASCII(domain)
+	if err != nil {
+		punycodeDomain = domain
+	}
+	records, _, err := c.API.ListDNSRecords(
+		ctx,
+		&cloudflare.ResourceContainer{Identifier: zoneID, Type: cloudflare.ZoneType},
+		cloudflare.ListDNSRecordsParams{Name: punycodeDomain},
+	)
+	if err != nil {
+		return err
+	}
+
+	grp, ctx := errgroup.WithContext(ctx)
+	for _, record := range records {
+		recordID := record.ID
+		grp.Go(func() error {
+			err = c.API.DeleteDNSRecord(
+				ctx,
+				&cloudflare.ResourceContainer{
+					Identifier: zoneID,
+					Type:       cloudflare.ZoneType,
+				},
+				recordID,
+			)
+			return err
+		})
+	}
+
+	return grp.Wait()
 }
