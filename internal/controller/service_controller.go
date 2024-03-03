@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"strconv"
 
-	v1 "github.com/isac322/cloudflared-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	v1 "github.com/isac322/cloudflared-operator/api/v1"
 )
 
 const (
