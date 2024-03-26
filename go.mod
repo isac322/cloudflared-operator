@@ -7,7 +7,7 @@ toolchain go1.21.6
 require (
 	github.com/cloudflare/cloudflare-go v0.90.0
 	github.com/goccy/go-json v0.10.2
-	github.com/onsi/ginkgo/v2 v2.17.0
+	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.32.0
 	golang.org/x/net v0.22.0
 	golang.org/x/sync v0.6.0
