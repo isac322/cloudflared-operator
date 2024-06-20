@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"reflect"
 	"strconv"
 
@@ -72,6 +73,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	hostName := annotations[HostNameAnnotation]
 	ports := service.Spec.Ports
 	var tunnel v1.Tunnel
+	var existingTunnelIngress v1.TunnelIngress
 
 	for _, port := range ports {
 		tunnelName := annotations[PortTunnelMappingAnnotation+port.Name]
@@ -79,22 +81,34 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Error(err, "No such Tunnel object exists with given name")
 			continue
 		}
+
 		tunnelIngress := createTunnelIngress(tunnelName, hostName, service, port)
-		if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
-			// TODO: error handling
+		err := r.Get(ctx, client.ObjectKey{Name: tunnelName, Namespace: service.Namespace}, &existingTunnelIngress)
+
+		if err != nil && errors.IsNotFound(err) {
+			if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
+				// TODO: error handling
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, tunnelIngress); err != nil {
+				logger.Error(err, "Failed to create TunnelIngress")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
 			return ctrl.Result{}, err
-		}
-		if err := ctrl.SetControllerReference(&service, tunnelIngress, r.Scheme); err != nil {
-			// TODO: error handling
-			return ctrl.Result{}, err
-		}
-		if err := r.Update(ctx, tunnelIngress); err != nil {
-			// TODO: error handling
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, tunnelIngress); err != nil {
-			logger.Error(err, "Failed to create TunnelIngress")
-			return ctrl.Result{}, err
+		} else {
+			// 객체가 존재하는 경우 소유자가 설정되어 있는지 확인
+			if !metav1.IsControlledBy(&existingTunnelIngress, &tunnel) {
+				if err := ctrl.SetControllerReference(&tunnel, &existingTunnelIngress, r.Scheme); err != nil {
+					logger.Error(err, "Failed to set controller reference for existing TunnelIngress")
+					return ctrl.Result{}, err
+				}
+			}
+			tunnelIngress.ResourceVersion = existingTunnelIngress.ResourceVersion
+			if err := r.Update(ctx, tunnelIngress); err != nil {
+				// TODO: error handling
+				return ctrl.Result{}, err
+			}
 		}
 	}
 	return ctrl.Result{}, nil
