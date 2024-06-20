@@ -5,11 +5,11 @@ go 1.21
 toolchain go1.21.6
 
 require (
-	github.com/cloudflare/cloudflare-go v0.92.0
-	github.com/goccy/go-json v0.10.2
+	github.com/cloudflare/cloudflare-go v0.98.0
+	github.com/goccy/go-json v0.10.3
 	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.32.0
-	golang.org/x/net v0.24.0
+	golang.org/x/net v0.26.0
 	golang.org/x/sync v0.7.0
 	k8s.io/api v0.29.3
 	k8s.io/apimachinery v0.29.3
@@ -42,7 +42,7 @@ require (
 	github.com/google/pprof v0.0.0-20231229205709-960ae82b1e42 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.5 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -61,11 +61,11 @@ require (
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/term v0.21.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	golang.org/x/tools v0.17.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
