@@ -124,7 +124,7 @@ func createTunnelIngress(tunnelName, hostName string, service corev1.Service, po
 		Spec: v1.TunnelIngressSpec{
 			TunnelConfigIngress: v1.TunnelConfigIngress{
 				Hostname: &hostName,
-				Service:  fmt.Sprintf("%s.%s.svc.cluster.local:%s", service.Name, service.Namespace, portStr),
+				Service:  fmt.Sprintf("http://%s.%s.svc.cluster.local:%s", service.Name, service.Namespace, portStr),
 			},
 			TunnelRef: v1.TunnelRef{
 				Kind: v1.TunnelKindTunnel,
