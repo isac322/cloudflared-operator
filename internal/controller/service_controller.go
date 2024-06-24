@@ -93,34 +93,30 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 
 		tunnelIngress := createTunnelIngress(tunnelName, hostName, service, port)
+		if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
+			logger.Error(err, "Failed to set controller reference for TunnelIngress",
+				"Tunnel", tunnel.Name, "Namespace", tunnel.Namespace, "TunnelIngress", tunnelIngress.Name)
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, tunnelIngress); err != nil && !errors.IsAlreadyExists(err) {
+			logger.Error(err, "Failed to create TunnelIngress")
+			return ctrl.Result{}, err
+		}
 		if err := r.Get(ctx, client.ObjectKey{Name: tunnelName, Namespace: service.Namespace}, &ingress); err != nil {
-			if errors.IsNotFound(err) {
-				if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
-					logger.Error(err, "Failed to set controller reference for TunnelIngress",
-						"Tunnel", tunnel.Name, "Namespace", tunnel.Namespace, "TunnelIngress", tunnelIngress.Name)
-					return ctrl.Result{}, err
-				}
-				if err := r.Create(ctx, tunnelIngress); err != nil {
-					logger.Error(err, "Failed to create TunnelIngress")
-					return ctrl.Result{}, err
-				}
-			} else {
+			return ctrl.Result{}, err
+		}
+		// If tunnelIngress exists, set owner and update
+		if !metav1.IsControlledBy(&ingress, &tunnel) {
+			if err := ctrl.SetControllerReference(&tunnel, &ingress, r.Scheme); err != nil {
+				logger.Error(err, "Failed to set controller reference for existing TunnelIngress")
 				return ctrl.Result{}, err
 			}
-		} else {
-			// If tunnelIngress exists, set owner and update
-			if !metav1.IsControlledBy(&ingress, &tunnel) {
-				if err := ctrl.SetControllerReference(&tunnel, &ingress, r.Scheme); err != nil {
-					logger.Error(err, "Failed to set controller reference for existing TunnelIngress")
-					return ctrl.Result{}, err
-				}
-			}
-			// Ensure ResourceVersion is correctly set
-			tunnelIngress.ResourceVersion = ingress.ResourceVersion
-			if err := r.Update(ctx, tunnelIngress); err != nil {
-				// TODO: error handling
-				return ctrl.Result{}, err
-			}
+		}
+		// Ensure ResourceVersion is correctly sete
+		tunnelIngress.ResourceVersion = ingress.ResourceVersion
+		if err := r.Update(ctx, tunnelIngress); err != nil {
+			// TODO: error handling
+			return ctrl.Result{}, err
 		}
 	}
 	return ctrl.Result{}, nil
@@ -238,11 +234,13 @@ func checkServiceUpdateForReconciliation() func(e event.UpdateEvent) bool {
 		for _, port := range updatedService.Spec.Ports {
 			portName := port.Name
 			// check if portToTunnel mapping annotation exists with given port name
-			portToTunnel, mappingExists := findTunnelMappingByPortName(newAnnotations, portName)
-			if !mappingExists {
-				// continue to see if other ports have correct annotations to create TunnelIngress object
+			portToTunnel, hasTunnelName := findTunnelMappingByPortName(newAnnotations, portName)
+
+			// continue to see if other ports have correct annotations to update TunnelIngress object
+			if !hasTunnelName {
 				continue
 			}
+
 			// check if there are any changes in tunnel mapping or host name for any port.
 			if portToTunnel != oldAnnotations[PortTunnelMappingAnnotation+portName] || hostName != oldAnnotations[HostNameAnnotation] {
 				return true
@@ -297,6 +295,6 @@ func findHostName(newAnnotations map[string]string) (string, bool) {
 }
 
 func findTunnelMappingByPortName(annotations map[string]string, portName string) (string, bool) {
-	portToTunnel, mappingExists := annotations[PortTunnelMappingAnnotation+portName]
-	return portToTunnel, mappingExists
+	portToTunnel, hasTunnelName := annotations[PortTunnelMappingAnnotation+portName]
+	return portToTunnel, hasTunnelName
 }
