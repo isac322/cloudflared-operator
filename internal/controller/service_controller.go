@@ -22,6 +22,13 @@ import (
 	"reflect"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,30 +77,45 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	annotations := service.Annotations
 	hostName := annotations[HostNameAnnotation]
+	if hostName == "" {
+		return ctrl.Result{}, nil
+	}
+
 	ports := service.Spec.Ports
 	var tunnel v1.Tunnel
+	var ingress v1.TunnelIngress
 
 	for _, port := range ports {
 		tunnelName := annotations[PortTunnelMappingAnnotation+port.Name]
 		if err := r.Get(ctx, client.ObjectKey{Name: tunnelName, Namespace: service.Namespace}, &tunnel); err != nil {
-			logger.Error(err, "No such Tunnel object exists with given name")
+			logger.Info("No such Tunnel object exists with given name", "TunnelName", tunnelName)
 			continue
 		}
+
 		tunnelIngress := createTunnelIngress(tunnelName, hostName, service, port)
 		if err := ctrl.SetControllerReference(&tunnel, tunnelIngress, r.Scheme); err != nil {
-			// TODO: error handling
+			logger.Error(err, "Failed to set controller reference for TunnelIngress",
+				"Tunnel", tunnel.Name, "Namespace", tunnel.Namespace, "TunnelIngress", tunnelIngress.Name)
 			return ctrl.Result{}, err
 		}
-		if err := ctrl.SetControllerReference(&service, tunnelIngress, r.Scheme); err != nil {
-			// TODO: error handling
+		if err := r.Create(ctx, tunnelIngress); err != nil && !errors.IsAlreadyExists(err) {
+			logger.Error(err, "Failed to create TunnelIngress")
 			return ctrl.Result{}, err
 		}
+		if err := r.Get(ctx, client.ObjectKey{Name: tunnelName, Namespace: service.Namespace}, &ingress); err != nil {
+			return ctrl.Result{}, err
+		}
+		// If tunnelIngress exists, set owner and update
+		if !metav1.IsControlledBy(&ingress, &tunnel) {
+			if err := ctrl.SetControllerReference(&tunnel, &ingress, r.Scheme); err != nil {
+				logger.Error(err, "Failed to set controller reference for existing TunnelIngress")
+				return ctrl.Result{}, err
+			}
+		}
+		// Ensure ResourceVersion is correctly sete
+		tunnelIngress.ResourceVersion = ingress.ResourceVersion
 		if err := r.Update(ctx, tunnelIngress); err != nil {
 			// TODO: error handling
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, tunnelIngress); err != nil {
-			logger.Error(err, "Failed to create TunnelIngress")
 			return ctrl.Result{}, err
 		}
 	}
@@ -104,13 +126,13 @@ func createTunnelIngress(tunnelName, hostName string, service corev1.Service, po
 	portStr := portToString(port)
 	tunnelIngress := &v1.TunnelIngress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tunnelName,
+			Name:      tunnelName, // set tunnelName as the name of TunnelIngress
 			Namespace: service.Namespace,
 		},
 		Spec: v1.TunnelIngressSpec{
 			TunnelConfigIngress: v1.TunnelConfigIngress{
 				Hostname: &hostName,
-				Service:  fmt.Sprintf("%s.%s.svc.cluster.local:%s", service.Name, service.Namespace, portStr),
+				Service:  fmt.Sprintf("http://%s.%s.svc.cluster.local:%s", service.Name, service.Namespace, portStr),
 			},
 			TunnelRef: v1.TunnelRef{
 				Kind: v1.TunnelKindTunnel,
@@ -131,34 +153,40 @@ func portToString(port corev1.ServicePort) string {
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Service{}).
-		//Watches(
-		//	&v1.Tunnel{},
-		//	handler.EnqueueRequestsFromMapFunc(r.findRelatedServiceObject),
-		//	//builder.WithPredicates(onlyResponseOnTunnelCreation()),
-		//).
-		WithEventFilter(predicate.Funcs{
-			UpdateFunc: checkServiceUpdateForReconciliation(),
-			CreateFunc: checkServiceCreationForReconciliation(),
-		}).
+		Watches(
+			&v1.Tunnel{},
+			handler.EnqueueRequestsFromMapFunc(r.findRelatedServiceObject),
+			builder.WithPredicates(triggerOnlyOnTunnelCreate()),
+		).
+		Watches(
+			&corev1.Service{},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(
+				predicate.Funcs{
+					UpdateFunc: checkServiceUpdateForReconciliation(),
+					CreateFunc: checkServiceCreationForReconciliation(),
+				},
+			),
+		).
 		Complete(r)
 }
 
-//func onlyResponseOnTunnelCreation() predicate.Funcs {
-//	return predicate.Funcs{
-//		CreateFunc: func(e event.CreateEvent) bool {
-//			return true
-//		},
-//		DeleteFunc: func(e event.DeleteEvent) bool {
-//			return false
-//		},
-//		UpdateFunc: func(e event.UpdateEvent) bool {
-//			return false
-//		},
-//		GenericFunc: func(e event.GenericEvent) bool {
-//			return false
-//		},
-//	}
-//}
+func triggerOnlyOnTunnelCreate() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return true
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return false
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return false
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
+}
 
 func checkServiceCreationForReconciliation() func(e event.CreateEvent) bool {
 	return func(e event.CreateEvent) bool {
@@ -206,11 +234,13 @@ func checkServiceUpdateForReconciliation() func(e event.UpdateEvent) bool {
 		for _, port := range updatedService.Spec.Ports {
 			portName := port.Name
 			// check if portToTunnel mapping annotation exists with given port name
-			portToTunnel, mappingExists := findTunnelMappingByPortName(newAnnotations, portName)
-			if !mappingExists {
-				// continue to see if other ports have correct annotations to create TunnelIngress object
+			portToTunnel, hasTunnelName := findTunnelMappingByPortName(newAnnotations, portName)
+
+			// continue to see if other ports have correct annotations to update TunnelIngress object
+			if !hasTunnelName {
 				continue
 			}
+
 			// check if there are any changes in tunnel mapping or host name for any port.
 			if portToTunnel != oldAnnotations[PortTunnelMappingAnnotation+portName] || hostName != oldAnnotations[HostNameAnnotation] {
 				return true
@@ -220,39 +250,41 @@ func checkServiceUpdateForReconciliation() func(e event.UpdateEvent) bool {
 	}
 }
 
-//func (r *ServiceReconciler) findRelatedServiceObject(ctx context.Context, tunnel client.Object) []reconcile.Request {
-//	tunnelName := tunnel.GetName()
-//	tunnelNamespace := tunnel.GetNamespace()
-//
-//	var list corev1.ServiceList
-//	if err := r.List(
-//		ctx,
-//		&list,
-//		client.InNamespace(tunnelNamespace),
-//	); err != nil {
-//		return []reconcile.Request{}
-//	}
-//
-//	for _, item := range list.Items {
-//		annotations := item.Annotations
-//		if _, hostNameExists := findHostName(annotations); !hostNameExists {
-//			continue
-//		}
-//		for _, port := range item.Spec.Ports {
-//			if tunnelName == annotations[PortTunnelMappingAnnotation+port.Name] {
-//				// if there's a service that already defines annotations for that specific Tunnel,
-//				// create Reconcile request
-//				return []reconcile.Request{{
-//					NamespacedName: types.NamespacedName{
-//						Name:      item.Name,
-//						Namespace: item.Namespace,
-//					},
-//				}}
-//			}
-//		}
-//	}
-//	return []reconcile.Request{}
-//}
+// List all the services in the same namespace as the Tunnel object that triggered the event.
+// This is to find related services that might need reconciliation due to the Tunnel change.
+func (r *ServiceReconciler) findRelatedServiceObject(ctx context.Context, tunnel client.Object) []reconcile.Request {
+	tunnelName := tunnel.GetName()
+	tunnelNamespace := tunnel.GetNamespace()
+
+	var list corev1.ServiceList
+	if err := r.List(
+		ctx,
+		&list,
+		client.InNamespace(tunnelNamespace),
+	); err != nil {
+		return []reconcile.Request{}
+	}
+
+	for _, item := range list.Items {
+		annotations := item.Annotations
+		if _, hostNameExists := findHostName(annotations); !hostNameExists {
+			continue
+		}
+		for _, port := range item.Spec.Ports {
+			if tunnelName == annotations[PortTunnelMappingAnnotation+port.Name] {
+				// if there's a service that already defines annotations for that specific Tunnel,
+				// create Reconcile request
+				return []reconcile.Request{{
+					NamespacedName: types.NamespacedName{
+						Name:      item.Name,
+						Namespace: item.Namespace,
+					},
+				}}
+			}
+		}
+	}
+	return []reconcile.Request{}
+}
 
 // Check if the service has a hostname annotation ("cloudflared-operator.bhyoo.com/host-name") specified.
 // This annotation is crucial for identifying the target host name for the TunnelIngress creation.
@@ -263,6 +295,6 @@ func findHostName(newAnnotations map[string]string) (string, bool) {
 }
 
 func findTunnelMappingByPortName(annotations map[string]string, portName string) (string, bool) {
-	portToTunnel, mappingExists := annotations[PortTunnelMappingAnnotation+portName]
-	return portToTunnel, mappingExists
+	portToTunnel, hasTunnelName := annotations[PortTunnelMappingAnnotation+portName]
+	return portToTunnel, hasTunnelName
 }
